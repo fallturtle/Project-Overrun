@@ -34,9 +34,15 @@ body { margin: 0; overflow: hidden; background: black; }
 
 <script>
 let scene, camera, renderer;
+
 let velocity = new THREE.Vector3();
+let direction = new THREE.Vector3();
+
 let move = { f:false, b:false, l:false, r:false };
 let canJump = false;
+
+let yaw = 0;
+let pitch = 0;
 
 init();
 animate();
@@ -52,82 +58,103 @@ function init() {
   renderer.setSize(innerWidth, innerHeight);
   document.body.appendChild(renderer.domElement);
 
-  // light
   const light = new THREE.HemisphereLight(0xffffff, 0x444444);
   scene.add(light);
 
-  // ground
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(200,200),
-    new THREE.MeshStandardMaterial({color:0x555555})
+    new THREE.PlaneGeometry(200, 200),
+    new THREE.MeshStandardMaterial({ color: 0x555555 })
   );
-  floor.rotation.x = -Math.PI/2;
+  floor.rotation.x = -Math.PI / 2;
   scene.add(floor);
 
-  // pointer lock
   document.getElementById("overlay").onclick = () => {
     document.body.requestPointerLock();
     document.getElementById("overlay").style.display = "none";
   };
 
-  document.addEventListener("mousemove", e=>{
-    if(document.pointerLockElement === document.body){
-      camera.rotation.y -= e.movementX * 0.002;
-      camera.rotation.x -= e.movementY * 0.002;
+  document.addEventListener("mousemove", (e) => {
+    if (document.pointerLockElement === document.body) {
+      yaw -= e.movementX * 0.002;
+      pitch -= e.movementY * 0.002;
+
+      pitch = Math.max(-1.5, Math.min(1.5, pitch));
+
+      camera.rotation.set(pitch, yaw, 0);
     }
   });
 
-  document.addEventListener("keydown", e=>{
-    if(e.code==="KeyW") move.f=true;
-    if(e.code==="KeyS") move.b=true;
-    if(e.code==="KeyA") move.l=true;
-    if(e.code==="KeyD") move.r=true;
-    if(e.code==="Space" && canJump){
+  document.addEventListener("keydown", (e) => {
+    if (e.code === "KeyW") move.f = true;
+    if (e.code === "KeyS") move.b = true;
+    if (e.code === "KeyA") move.l = true;
+    if (e.code === "KeyD") move.r = true;
+
+    if (e.code === "Space" && canJump) {
       velocity.y = 5;
       canJump = false;
     }
   });
 
-  document.addEventListener("keyup", e=>{
-    if(e.code==="KeyW") move.f=false;
-    if(e.code==="KeyS") move.b=false;
-    if(e.code==="KeyA") move.l=false;
-    if(e.code==="KeyD") move.r=false;
+  document.addEventListener("keyup", (e) => {
+    if (e.code === "KeyW") move.f = false;
+    if (e.code === "KeyS") move.b = false;
+    if (e.code === "KeyA") move.l = false;
+    if (e.code === "KeyD") move.r = false;
   });
 
-  window.addEventListener("resize", ()=>{
-    camera.aspect = innerWidth/innerHeight;
+  window.addEventListener("resize", () => {
+    camera.aspect = innerWidth / innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
   });
 }
 
-function animate(){
+function animate() {
   requestAnimationFrame(animate);
 
-  let dir = new THREE.Vector3();
+  // RESET direction each frame
+  direction.set(0, 0, 0);
 
-  if(move.f) dir.z -= 1;
-  if(move.b) dir.z += 1;
-  if(move.l) dir.x -= 1;
-  if(move.r) dir.x += 1;
+  if (move.f) direction.z -= 1;
+  if (move.b) direction.z += 1;
+  if (move.l) direction.x -= 1;
+  if (move.r) direction.x += 1;
 
-  dir.normalize();
+  direction.normalize();
 
-  velocity.x = dir.x * 0.2;
-  velocity.z = dir.z * 0.2;
+  // Convert LOCAL direction → WORLD direction based on camera yaw
+  const forward = new THREE.Vector3();
+  const right = new THREE.Vector3();
 
+  camera.getWorldDirection(forward);
+  forward.y = 0;
+  forward.normalize();
+
+  right.crossVectors(forward, new THREE.Vector3(0,1,0)).normalize();
+
+  const moveX = right.multiplyScalar(direction.x);
+  const moveZ = forward.multiplyScalar(direction.z);
+
+  const moveDir = new THREE.Vector3();
+  moveDir.add(moveX);
+  moveDir.add(moveZ);
+
+  velocity.x = moveDir.x * 0.25;
+  velocity.z = moveDir.z * 0.25;
+
+  // gravity
   velocity.y -= 0.2;
 
   camera.position.add(velocity);
 
-  if(camera.position.y < 2){
+  if (camera.position.y < 2) {
     camera.position.y = 2;
     velocity.y = 0;
     canJump = true;
   }
 
-  renderer.render(scene,camera);
+  renderer.render(scene, camera);
 }
 </script>
 
